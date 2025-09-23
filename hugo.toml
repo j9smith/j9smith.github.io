@@ -1,4 +1,18 @@
-baseURL = 'https://example.org/'
-languageCode = 'en-us'
-title = 'My New Hugo Site'
+baseURL = 'https://j9smith.github.io/'
+languageCode = 'en-gb'
+title = 'Joel Smith'
 theme = 'typo'
+
+[menu]
+    [[menu.main]]
+        name = "Home"
+        url = "/"
+        weight = 1
+    [[menu.main]]
+        name = "About"
+        url = "/"
+        weight = 2
+    [[menu.main]]
+        name = "Projects"
+        url = "/"
+        weight = 3
