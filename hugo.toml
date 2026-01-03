@@ -30,10 +30,11 @@ description = "My personal website"
 
 # Appearance settings
 theme = 'light'
-colorPalette = 'custom'
 hideHeader = true
 showFooter = false
 favicon = "/favicon.ico"
+colorPalette = 'custom'
+
 
 
 # Intro on main page, content is markdown
