@@ -1,6 +1,6 @@
 +++
 date = '2026-01-03T19:53:15Z'
-draft = true
+draft = false
 math = true
 title = 'Exploring the theory behind Variational Autoencoders (VAEs)'
 summary = 'How do VAEs work?'
