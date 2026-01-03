@@ -1,0 +1,14 @@
+.home-avatar {
+  width: 250px;
+  height: 250px;
+  float: left;
+  margin: 0.25rem 1rem 0.5rem 0;
+
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+}
+
+:root {
+  --main-width: 1000px; 
+  --main-padding: 1.6em;  
+}

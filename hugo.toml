@@ -1,18 +1,101 @@
 baseURL = 'https://j9smith.github.io/'
-languageCode = 'en-gb'
+languageCode = 'en-us'
 title = 'Joel Smith'
 theme = 'typo'
 
-[menu]
-    [[menu.main]]
-        name = "Home"
-        url = "/"
-        weight = 1
-    [[menu.main]]
-        name = "About"
-        url = "/"
-        weight = 2
-    [[menu.main]]
-        name = "Projects"
-        url = "/"
-        weight = 3
+# Syntax highlight on code blocks
+[markup]
+[markup.highlight]
+noClasses = false
+ [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+
+    [markup.goldmark.extensions]
+      math = true
+
+    [markup.goldmark.extensions.passthrough]
+      enable = true
+
+    [markup.goldmark.extensions.passthrough.delimiters]
+      block  = [['$$', '$$']]
+      inline = [['$', '$']]
+
+[taxonomies]
+tag = 'tags'
+
+[params]
+# Meta description
+description = "My personal website"
+
+# Appearance settings
+theme = 'light'
+colorPalette = 'custom'
+hideHeader = true
+showFooter = false
+favicon = "/favicon.ico"
+
+
+# Intro on main page, content is markdown
+homeIntroTitle = 'About'
+homeIntroContent = """
+<img src="/images/uimg.png" alt="Joel Smith" class="home-avatar" />
+Data Science & Artificial Intelligence MSc graduate with a love for the field and a hands-on approach to learning. I enjoy building things and sharing what I learn along the way. I'm looking to grow into a machine learning engineering role where I can apply what I've learned to real-world problems. I bring a strong foundation in ML fundamentals, practical software experience, and an eagerness to collaborate with curious, like-minded people. Currently exploring generative modelling.
+"""
+
+# Collection to display on home
+homeCollectionTitle = 'Posts'
+homeCollection = 'posts'
+
+# Lists parameters
+paginationSize = 100
+listSummaries = true
+listDateFormat = '2 Jan 2006'
+
+# Breadcrumbs
+[params.breadcrumbs]
+enabled = true
+showCurrentPage = true
+home = "home"
+
+# Social icons
+[[params.social]]
+name = "linkedin"
+url = "https://www.linkedin.com/in/joel-smith9/"
+
+[[params.social]]
+name = "github"
+url = "https://github.com/j9smith"
+
+# Main menu pages
+[[params.menu]]
+name = "home"
+url = "/"
+
+[[params.menu]]
+name = "posts"
+url = "/posts"
+
+[[params.menu]]
+name = "cv"
+url = "/cv.pdf"
+
+[[params.menu]]
+name = "github"
+url = "https://www.github.com/j9smith"
+
+[[params.menu]]
+name = "linkedin"
+url = "https://www.linkedin.com/in/joel-smith9"
+
+
+
+# Giscus comments
+[params.giscus]
+enable = false
+repo = "user/repo"
+repoid = "repoId"
+category = "General"
+categoryid = "categoryId"
+mapping = "pathname"
+theme = "preferred_color_scheme"
