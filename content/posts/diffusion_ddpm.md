@@ -236,22 +236,7 @@ $$KL(\delta(x_0)||p_\theta(x_0|x_1))=-\log p_\theta(x_0|x_1) + \text{const}.$$
 where the constant does not depend on $\theta$ and so can be dropped. 
 
 This yields the **final ELBO loss**:
-$$
-\mathcal{L}(\theta; x_0)=\mathbb{E}_q
-\left[
-\underbrace{
-    KL\left(q(x_T|x_0)||p(x_T)\right)
-}_{\text{L}_T}
-+
-\underbrace{
-    \sum_{t=2}^T KL(q(x_{t-1}|x_t,x_0)||p_\theta(x_{t-1}|x_t))
-}_{\text{L}_{t-1}}
--
-\underbrace{
-    \log p_\theta(x_0|x_1)
-}_{\text{L}_{0}}
-\right]
-$$
+$$\mathcal{L}(\theta; x_0)=\mathbb{E}_q\left[\underbrace{KL\left(q(x_T|x_0)||p(x_T)\right)}_{\text{L}_T}+\underbrace{\sum_{t=2}^T KL(q(x_{t-1}|x_t,x_0)||p_\theta(x{t-1}|x_t))}_{\text{L}_{t-1}}-\underbrace{\log p_\theta(x_0|x_1)}_{\text{L}_{0}}\right]$$
 
 However, in practice, note that $L_T$ does not depend on $\theta$ - $q(x_T|x_0)$ is fully determined by the diffusion schedule and $p(x_T)$ is chosen in advance ($\mathcal{N}(0,I)$) - and so does not contribute to learning and can be safely dropped. 
 
