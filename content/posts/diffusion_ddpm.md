@@ -1,7 +1,9 @@
 +++
 date = '2026-01-13T19:52:58Z'
 draft = false
+math = true
 title = 'A Deep Dive into Diffusion Models: DDPM (1/?)'
+summary = 'An introduction to diffusion models with a focus on denoising diffusion probabilistic models (DDPM).'
 +++
 
 # Diffusion Models
