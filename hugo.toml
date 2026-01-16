@@ -5,8 +5,9 @@ theme = 'typo'
 
 # Syntax highlight on code blocks
 [markup]
-[markup.highlight]
-noClasses = false
+  [markup.highlight]
+    noClasses = false
+    style = "github"
  [markup.goldmark]
     [markup.goldmark.renderer]
       unsafe = true
@@ -30,7 +31,7 @@ description = "My personal website"
 
 # Appearance settings
 theme = 'light'
-hideHeader = true
+hideHeader = false
 showFooter = false
 favicon = "/favicon.ico"
 colorPalette = 'custom'
