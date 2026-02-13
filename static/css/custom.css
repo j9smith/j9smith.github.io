@@ -23,3 +23,55 @@ pre, pre code {
   font-size: 0.9em;
   line-height: 1.6;
 }
+
+/* Base: mobile-first (stacked) */
+.home-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.home-avatar-wrap {
+  width: 250px;            /* adjust */
+  aspect-ratio: 1 / 1;     /* square box */
+  border-radius: 50%;
+  overflow: hidden;        /* crops the image to the circle */
+}
+
+.home-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;       /* crop, don’t stretch */
+  object-position: center; /* adjust if needed */
+  display: block;
+  float: none !important;
+}
+
+
+/* Desktop: horizontal layout */
+@media (min-width: 900px) {
+  .home-hero {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 2rem;
+  }
+
+  .home-hero__text {
+    max-width: 75ch;           /* prevents super-wide text */
+  }
+
+  .home-avatar {
+    width: 320px;
+    margin: 0;                 /* no centering margin on desktop */
+  }
+}
+
+/* Optional: tighten paragraph spacing inside the hero */
+.home-hero__text p {
+  margin: 0 0 1rem 0;
+}
+.home-hero__text p:last-child {
+  margin-bottom: 0;
+}

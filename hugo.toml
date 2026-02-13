@@ -40,14 +40,21 @@ colorPalette = 'custom'
 
 # Intro on main page, content is markdown
  #homeIntroTitle = 'About'
- homeIntroContent = """
- <img src="/images/uimg.png" alt="Joel Smith" class="home-avatar" /><br>
- Hi, I'm Joel 👋 I'm a Data Science & Artificial Intelligence MSc graduate taking a hands-on approach to learning. I enjoy turning ideas into working ML systems and sharing what I learn along the way (see below for some of my posts). 
- 
- I'm particularly interested in generative modelling and engineering the infrastructure required to support it at scale.
+homeIntroContent = """
+<div class="home-hero">
+  <div class="home-avatar-wrap">
+    <img src="/images/uimg.png" alt="Joel Smith" class="home-avatar" />
+  </div>
 
- Feel free to reach out to chat about anything ML 👇
- """
+  <div class="home-hero__text">
+    <p>Hi, I'm Joel 👋 I'm a Data Science & Artificial Intelligence MSc graduate taking a hands-on approach to learning. I enjoy turning ideas into working ML systems and sharing what I learn along the way (see below for some of my posts).</p>
+    <p>I'm particularly interested in generative modelling and engineering the infrastructure required to support it at scale.</p>
+    <p>Feel free to reach out to chat about anything ML.</p>
+  </div>
+</div>
+"""
+
+
 
 # Collection to display on home
 homeCollectionTitle = 'Posts'
