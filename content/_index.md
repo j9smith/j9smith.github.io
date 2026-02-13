@@ -2,13 +2,13 @@
 title: "Home"
 ---
 
-<img src="/images/uimg.png" alt="Joel Smith" class="home-avatar" /><br>
+<!-- <img src="/images/uimg.png" alt="Joel Smith" class="home-avatar" /><br>
 Data Science & Artificial Intelligence MSc graduate with a love for the field and a hands-on approach to learning. I enjoy building things and sharing what I learn along the way. I'm looking to grow into a machine learning engineering role where I can apply what I've learned to real-world problems. I bring a strong foundation in ML fundamentals, practical software experience, and an eagerness to collaborate with curious, like-minded people. Currently exploring generative modelling.
 <br>
 <br>
-<hr>
+<hr> -->
 
-### Education
+<!-- ### Education
 **University of Liverpool**<br>
 *Data Science & Artificial Intelligence MSc, Distinction* | 2024-2025
 
@@ -21,4 +21,4 @@ Data Science & Artificial Intelligence MSc graduate with a love for the field an
 
 **Fin-LLM** | [repo](https://github.com/j9smith/fin-llm)<br>
 *Addressing financial inequality by reducing informational and cognitive barriers faced by non-expert financial market participants. It consolidates fragmented market-relevant data and delivers tailored, accessible insights, helping to bridge the gap between professional-grade financial knowledge and the general public.*
-
+ -->

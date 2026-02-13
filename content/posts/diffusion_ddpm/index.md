@@ -6,17 +6,20 @@ title = 'A Deep Dive into Diffusion Models: DDPM (1/?)'
 summary = 'An introduction to diffusion models with a focus on denoising diffusion probabilistic models (DDPM).'
 +++
 
-# Diffusion Models
-## Theory
+<!-- ![diff](diff.png) -->
+Firstly, I will apologise if the following seems a little bit dense. It is not necessarily a casual read if you are completely unfamiliar to diffusion models, and so I would advise dedicating time to read it closely and test your understanding of each new idea. This post was written as a means of digesting the topic myself, and so I apologise in advance for any mistakes, and would welcome any corrections. If you're interested in reading more, I've left a few references at the bottom of the page.
+<hr>
 
+**tl;dr** *We define a forward Markov chain that progressively corrupts data with Gaussian noise so that $q(x_T)\approx\mathcal{N}(0,I)$, allowing us to derive closed-form conditionals $q(x_t|x_0)$ and a tractable Gaussian posterior $q(x_{t-1}|x_t, x_0)$. Although the true reverse kernel $q(x_{t-1}|x_t)$ is intractable, the Gaussian structure allows us to instead express the reverse-time posterior analytically when conditioned on the original data, $x_0$. We can leverage this fact to define a reverse process by predicting $x_0$ using a neural network and using this prediction to parameterise the mean of a Gaussian reverse kernel $p_\theta(x_{t-1}|x_t)$ which is trained via variational inference by maximising the evidence lower bound (ELBO), which pushes the distribution induced by the learned reverse kernel $p_\theta(x_{t-1}|x_t)$ to match the true reverse-time posterior $q(x_{t-1}|x_t, x_0)$ at each timestep. The ELBO decomposes into a sum of KL divergences between these two Gaussian conditionals, so optimisation amounts to aligning the mean of the approximate reverse transition with the analytically derived posterior under the forward process. This reduces to a timestep-averaged mean squared error on the predicted $x_0$ (in practice by predicting the injected noise which implicitly defines $\hat{x}_0$). Sampling proceeds via ancestral denoising from $x_T\sim\mathcal{N}(0,I)$ through the learned reverse chain.*
+<hr>
 
-![diff](diff.png)
+To understand the essence of diffusion models, let us first consider a llama-shaped cloud suspended in a room. This cloud is the outcome of some unknown generative process that produces animal-shaped clouds. After its formation, the particles that compose this cloud will begin to jitter and move randomly, causing the shape to gradually dissipate. First we'll start to lose the finer details - the ears may appear to mould into the head, and the tail may blur into the body - and as the dissipation continues, we'll lose any semblance of a llama at all. While we can't possibly evaluate the precise trajectory of any individual particle throughout this process, we can describe their evolution probabilistically - at each step, there exists a distribution over particle displacements that depends only on their current configuration. 
 
-To understand the essence of diffusion models, let us first consider a conspicuously llama-shaped cloud suspended in a room. This cloud is the outcome of some unknown generative process. After its formation, the particles that compose this cloud will begin to jitter randomly, causing the shape to gradually dissipate. While we can't possibly evaluate the precise trajectory of any individual particle, we can describe their evolution probabilistically - at each step, there exists a distribution over particle displacements that depends only on their current configuration. 
+Now suppose that, rather than allowing this dissipation to occur naturally, we deliberately define the stochastic rule governing how this cloud evolves. At each step, we inject noise according to a known distribution (so we control the probabilistic evolution of their movement), chosen such that after sufficiently many steps, the cloud reaches a simple and predictable terminal distribution. This means that we can define a forward stochastic process that progressively destroys structure whilst remaining analytically tractable. Simply - if we can define a process that carries data to noise, we can approximate its reverse-time conditionals to carry them from noise to data. This means that we can start from a cloud of particles distributed according to a known (noisy) distribution, and then iteratively sample reverse transitions to reposition the particles to resemble a llama.
 
-Now suppose that, rather than allowing this dissipation to occur naturally, we deliberately define the stochastic rule governing how this cloud evolves. At each step, we inject noise according to a known distribution, chosen such that after sufficiently many steps, the cloud reaches a simple and predictable terminal distribution. This defines a forward stochastic process that progressively destroys structure whilst remaining analytically tractable. 
+The central question, then, of diffusion models is not whether we can reverse individual particle trajectories, but whether we can leverage this analytically tractable forward diffusion process to define a corresponding stochastic reverse process whose induced distributions recover the original data, starting from the known terminal distribution. 
 
-The central question, then, of diffusion models is not whether we can reverse individual particle trajectories, but whether we can define a stochastic reverse process whose induced distributions recover the original data, starting from the known terminal distribution. Let's start by formalising the problem. 
+Let's start by formalising the problem. 
 
 This cloud, $x_0$, has been formed as a result of an underlying generative process that forms a distribution, $q(x_0)$, over every possible shape that can be generated by this process. While we cannot possibly hope to learn the underlying generative process, it is possible to approximate the distribution that it implies so that we may sample new data from it.
 
@@ -264,7 +267,7 @@ $$\mu_\theta(x_t, t)=\frac{\sqrt{\alpha_t}(1-\bar{\alpha}_{t-1})}{1-\bar{\alpha}
 To consider how this network will be trained, let's revisit the original objective - approximating the reverse-time kernel:
 $$p_\theta(x_{t-1}|x_t)\approx q(x_{t-1}|x_t, x_0)$$
 
-We want the distribution of our kernel to approach that of the true reverse-time kernel by adjusting the parameters $\theta$. Naturally, minimising the Kullback-Leibler divergence (KL) between our model and the true underlying presents a reasonable objective:
+We want the distribution of our kernel to approach that of the true reverse-time kernel by adjusting the parameters $\theta$. Revisiting the ELBO we derived earlier, this amounts to minimising the KL divergence between our model and the true underlying posterior:
 $$\mathcal{L}(\theta)\doteq\mathbb{E}_{t\sim\text{Uniform}\set{1,...,T}, x_0\sim q_\text{data}, \epsilon\sim\mathcal{N}(0,I)}\left[\text{KL}\left(q(x_{t-1}|x_t, x_0)||p_\theta(x_{t-1}|x_t)\right)\right]$$
 
 A standard identity of the KL divergence between two Gaussian distributions with the same covariance is such that
@@ -466,7 +469,7 @@ plt.figure(figsize=(4,4))
 plt.scatter(X[:, 0], X[:, 1], s=1)
 ```
 
-![alt text](swiss_roll_ds.png)
+![alt text](swiss_roll_ds.png) 
 Next, we define our dataloader and training loop.
 
 ```python
@@ -547,3 +550,8 @@ plt.show()
 ```
 
 ![alt text](generated.png)
+
+### References and Further Reading
+- Ho, J. et al. (2020). Denoising Diffusion Probabilistic Models ([arxiv](https://arxiv.org/abs/2006.11239))
+- Murphy, K. P. (2023). Probabilistic Machine Learning: Advanced Topics, Chapter 25: Diffusion Models ([MIT Press](https://probml.github.io/pml-book/book2.html))
+- Sohl-Dickstein, J. et al. (2015). Deep Unsupervised Learning using Nonequilibrium Thermodynamics ([arxiv](https://arxiv.org/abs/1503.03585))

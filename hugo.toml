@@ -39,11 +39,15 @@ colorPalette = 'custom'
 
 
 # Intro on main page, content is markdown
-# homeIntroTitle = 'About'
-# homeIntroContent = """
-# <img src="/images/uimg.png" alt="Joel Smith" class="home-avatar" />
-# Data Science & Artificial Intelligence MSc graduate with a love for the field and a hands-on approach to learning. I enjoy building things and sharing what I learn along the way. I'm looking to grow into a machine learning engineering role where I can apply what I've learned to real-world problems. I bring a strong foundation in ML fundamentals, practical software experience, and an eagerness to collaborate with curious, like-minded people. Currently exploring generative modelling.
-# """
+ #homeIntroTitle = 'About'
+ homeIntroContent = """
+ <img src="/images/uimg.png" alt="Joel Smith" class="home-avatar" /><br>
+ Hi, I'm Joel 👋 I'm a Data Science & Artificial Intelligence MSc graduate taking a hands-on approach to learning. I enjoy turning ideas into working ML systems and sharing what I learn along the way (see below for some of my posts). 
+ 
+ I'm particularly interested in generative modelling and engineering the infrastructure required to support it at scale.
+
+ Feel free to reach out to chat about anything ML 👇
+ """
 
 # Collection to display on home
 homeCollectionTitle = 'Posts'
@@ -56,7 +60,7 @@ listDateFormat = '2 Jan 2006'
 
 # Breadcrumbs
 [params.breadcrumbs]
-enabled = true
+enabled = false
 showCurrentPage = true
 home = "home"
 
@@ -77,6 +81,10 @@ url = "/"
 [[params.menu]]
 name = "posts"
 url = "/posts/"
+
+[[params.menu]]
+name = "projects"
+url = "/projects/"
 
 [[params.menu]]
 name = "cv"
