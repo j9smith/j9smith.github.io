@@ -1,7 +1,16 @@
+@import "chroma.css";
+
+/* ── Variables ── */
 :root {
+  --main-width: 1000px;
+  --main-padding: 1.6em;
+  --code-padding: 0.6rem 0.9rem;
+  --code-margin-top: 0.75rem;
+  --code-border-radius: 6px;
   --p-font-size: 18px;
 }
 
+/* ── Typography ── */
 body {
   font-family: "EB Garamond", serif;
   line-height: 1.75;
@@ -13,18 +22,40 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
 }
 
-code {
+/* ── Code ── */
+code,
+pre,
+pre code {
   font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 0.95em;
+  font-size: 0.8rem;
+  line-height: 1.5;
 }
 
-pre, pre code {
-  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 0.9em;
-  line-height: 1.6;
+pre code {
+  background: transparent;
+  padding: 0;
 }
 
-/* Base: mobile-first (stacked) */
+li code, table code, p code {
+  font-size: 0.8rem !important;
+  padding: 0.15em 0.35em;
+}
+
+/* ── Chroma / syntax highlighted blocks ── */
+.chroma .lntable {
+  width: 100%;
+}
+
+.chroma .lntd:last-child {
+  width: 100%;
+}
+
+.chroma pre {
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Avatar / Hero ── */
 .home-hero {
   display: flex;
   flex-direction: column;
@@ -33,23 +64,29 @@ pre, pre code {
 }
 
 .home-avatar-wrap {
-  width: 250px;            /* adjust */
-  aspect-ratio: 1 / 1;     /* square box */
+  width: 250px;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
-  overflow: hidden;        /* crops the image to the circle */
+  overflow: hidden;
 }
 
 .home-avatar {
   width: 100%;
   height: 100%;
-  object-fit: cover;       /* crop, don’t stretch */
-  object-position: center; /* adjust if needed */
+  object-fit: cover;
+  object-position: center;
   display: block;
   float: none !important;
 }
 
+.home-hero__text p {
+  margin: 0 0 1rem 0;
+}
 
-/* Desktop: horizontal layout */
+.home-hero__text p:last-child {
+  margin-bottom: 0;
+}
+
 @media (min-width: 900px) {
   .home-hero {
     flex-direction: row;
@@ -59,19 +96,11 @@ pre, pre code {
   }
 
   .home-hero__text {
-    max-width: 75ch;           /* prevents super-wide text */
+    max-width: 75ch;
   }
 
   .home-avatar {
     width: 320px;
-    margin: 0;                 /* no centering margin on desktop */
+    margin: 0;
   }
-}
-
-/* Optional: tighten paragraph spacing inside the hero */
-.home-hero__text p {
-  margin: 0 0 1rem 0;
-}
-.home-hero__text p:last-child {
-  margin-bottom: 0;
 }
