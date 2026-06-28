@@ -79,6 +79,18 @@ li code, table code, p code {
   float: none !important;
 }
 
+.img-container {
+  aspect-ratio: var(--w) / var(--h);
+  max-width: calc(var(--w) * 1px);  /* never wider than the real image */
+  margin-inline: auto;               /* center it in the column */
+}
+
+.img-container img {
+  width: 100%;
+  height: 100%;
+  display: block;                    /* kills inline-element baseline gap too */
+}
+
 .home-hero__text p {
   margin: 0 0 1rem 0;
 }
