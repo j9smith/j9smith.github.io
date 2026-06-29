@@ -390,7 +390,7 @@ Firstly, we'll capture and restore the live vLLM process when it has finished in
 
 <div style="display: flex; justify-content: center;">
   <div style="width: 100%; max-width: 560px;">
-    {{< result checkpoint="15GB" ttft="31.1s" restore="29.3" reload="0" ckptdelta="" ttftdelta="" color="green" >}}
+    {{< fast-vllm checkpoint="15GB" ttft="31.1s" restore="29.3" reload="0" ckptdelta="" ttftdelta="" color="green" >}}
   </div>
 </div>  
 
@@ -409,7 +409,7 @@ Thankfully, when we [wake vLLM back up](https://github.com/vllm-project/vllm/blo
 
 <div style="display: flex; justify-content: center;">
   <div style="width: 100%; max-width: 560px;">
-    {{< result checkpoint="11.4GB" ttft="16.2s" restore="13.9" reload="2.3" ckptdelta="3.6" ttftdelta="13.9" color="green" >}}
+    {{< fast-vllm checkpoint="11.4GB" ttft="16.2s" restore="13.9" reload="2.3" ckptdelta="3.6" ttftdelta="13.9" color="green" >}}
   </div>
 </div>  
 
@@ -417,7 +417,7 @@ We can also whittle down the time it takes to restore the vLLM process to a live
 
 <div style="display: flex; justify-content: center;">
   <div style="width: 100%; max-width: 560px;">
-    {{< result checkpoint="11.4GB" ttft="13.9s" restore="11.6" reload="2.3" ckptdelta="" ttftdelta="2.3" color="green" >}}
+    {{< fast-vllm checkpoint="11.4GB" ttft="13.9s" restore="11.6" reload="2.3" ckptdelta="" ttftdelta="2.3" color="green" >}}
   </div>
 </div>  
 
@@ -434,7 +434,7 @@ This weight reload functions in much the same way to the initial weight load -- 
 
 <div style="display: flex; justify-content: center;">
   <div style="width: 100%; max-width: 560px;">
-    {{< result checkpoint="3.4GB" ttft="10.5s" restore="2.5" reload="8" ckptdelta="8" ttftdelta="3.4" color="green" >}}
+    {{< fast-vllm checkpoint="3.4GB" ttft="10.5s" restore="2.5" reload="8" ckptdelta="8" ttftdelta="3.4" color="green" >}}
   </div>
 </div>  
 
@@ -457,7 +457,7 @@ Thus, we arrive at [`reload_weights_fast`](https://github.com/j9smith/vllm/blob/
 
 <div style="display: flex; justify-content: center;">
   <div style="width: 100%; max-width: 560px;">
-    {{< result checkpoint="3.4GB" ttft="5.8s" restore="2.5" reload="3.3" ckptdelta="" ttftdelta="4.7" color="green" >}}
+    {{< fast-vllm checkpoint="3.4GB" ttft="5.8s" restore="2.5" reload="3.3" ckptdelta="" ttftdelta="4.7" color="green" >}}
   </div>
 </div>
 
