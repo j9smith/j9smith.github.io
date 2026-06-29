@@ -2,12 +2,10 @@
 date = '2026-01-13T19:52:58Z'
 draft = false
 math = true
-title = 'A Deep Dive into Diffusion Models: DDPM (1/?)'
+title = 'A Deep Dive into Diffusion Models: DDPM'
 summary = 'An introduction to diffusion models with a focus on denoising diffusion probabilistic models (DDPM).'
 +++
 
-<!-- ![diff](diff.png) -->
-Firstly, I will apologise if the following seems a little bit dense. It is not necessarily a casual read if you are completely unfamiliar to diffusion models, and so I would advise dedicating time to read it closely and test your understanding of each new idea. This post was written as a means of digesting the topic myself, and so I apologise in advance for any mistakes, and would welcome any corrections. If you're interested in reading more, I've left a few references at the bottom of the page.
 <hr>
 
 **tl;dr** *We define a forward Markov chain that progressively corrupts data with Gaussian noise so that $q(x_T)\approx\mathcal{N}(0,I)$, allowing us to derive closed-form conditionals $q(x_t|x_0)$ and a tractable Gaussian posterior $q(x_{t-1}|x_t, x_0)$. Although the true reverse kernel $q(x_{t-1}|x_t)$ is intractable, the Gaussian structure allows us to instead express the reverse-time posterior analytically when conditioned on the original data, $x_0$. We can leverage this fact to define a reverse process by predicting $x_0$ using a neural network and using this prediction to parameterise the mean of a Gaussian reverse kernel $p_\theta(x_{t-1}|x_t)$ which is trained via variational inference by maximising the evidence lower bound (ELBO), which pushes the distribution induced by the learned reverse kernel $p_\theta(x_{t-1}|x_t)$ to match the true reverse-time posterior $q(x_{t-1}|x_t, x_0)$ at each timestep. The ELBO decomposes into a sum of KL divergences between these two Gaussian conditionals, so optimisation amounts to aligning the mean of the approximate reverse transition with the analytically derived posterior under the forward process. This reduces to a timestep-averaged mean squared error on the predicted $x_0$ (in practice by predicting the injected noise which implicitly defines $\hat{x}_0$). Sampling proceeds via ancestral denoising from $x_T\sim\mathcal{N}(0,I)$ through the learned reverse chain.*

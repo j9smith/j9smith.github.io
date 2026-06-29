@@ -1,23 +1,25 @@
 +++
 date = '2026-05-17T16:36:24+01:00'
 draft = false
-title = 'Fast vLLM: Reducing container cold-start time by 20x [WIP]'
-summary = 'Reducing container start-up time from 117s to 6s.'
+math = true
+title = 'Fast vLLM: cutting cold starts by 20x'
+summary = 'Reducing container start-up time from 117s to 6s, the long way round.'
 +++
----
-This post is still a working piece.
 
-[doubleword's work](https://blog.doubleword.ai/fast-sglang-starts) heavily influenced this process.
+I am not a patient person. I would [like to](https://www.anthropic.com/news/fable-mythos-access) [usher in](https://openai.com/index/previewing-gpt-5-6-sol/#:~:text=As%20part%20of%20our%20ongoing,%20before%20releasing%20more%20broadly) the open-weights revolution as much as the next person, but I can't bear to wait two minutes to spin up a measly 3B parameter model just to address a passing thought. Nor can inference providers afford to waste seconds, let alone minutes, waiting for their autoscaler to spin up new instances when demand runs hot -- time is money, as they say. vLLM may be very good at squeezing throughput out of a GPU -- but inference optimisation requires a full-stack approach; it's no good serving hundreds of tokens per second if it takes us several minutes to get there -- by which point, my fleeting curiosity has dwindled -- we want answers, and we want them now. 
 
----
+Cold-start latency goes beyond a minor annoyance into a [serious tax on revenue](https://glinden.blogspot.com/2006/11/marissa-mayer-at-web-20.html#:~:text=Half%20a%20second%20delay,in%20traffic). The good news is that it is entirely addressable: most of it is work that we've already done, and, in principle, could avoid doing again. This post documents an attempt to do exactly that, while taking the scenic route.
 
-## Cold Start
+Much of this work was inspired and directly guided by the excellent [Cloudburst write-up](https://blog.doubleword.ai/fast-sglang-starts) from [Doubleword](https://doubleword.ai/). All metrics reported throughout this post reference Llama-3.2-3B-Instruct. Cold starts assume a freshly launched container with a cold page cache.
+
+## Starting vLLM
+Let's hit the ground running with an exposition of what happens when you execute `vllm serve`.
 
 ![alt text](resources/vllm-process-map.png)
 
-The meat of the work is performed within the [`Worker`](https://github.com/vllm-project/vllm/blob/c6741b2ad48a46e87d2cce35d113c4ae0950af91/vllm/v1/worker/gpu_worker.py#L124) and the [`GPUModelRunner`](https://github.com/vllm-project/vllm/blob/c6741b2ad48a46e87d2cce35d113c4ae0950af91/vllm/v1/worker/gpu_model_runner.py#L421).
+On startup, the process hits an [entrypoint](https://github.com/vllm-project/vllm/blob/db28ae2d078da82d01f8e7fad05fb27a52ce37ef/vllm/entrypoints/openai/api_server.py#L79) which begins to initialise vLLM. The main process is the API server, which [launches the engine in a background process](https://github.com/vllm-project/vllm/blob/db28ae2d078da82d01f8e7fad05fb27a52ce37ef/vllm/v1/engine/core.py#L1154). On [initialisation](https://github.com/vllm-project/vllm/blob/db28ae2d078da82d01f8e7fad05fb27a52ce37ef/vllm/v1/engine/core.py#L99), the engine core loads a [model executor](https://github.com/vllm-project/vllm/blob/9e86352c606c61095029f156ae3e4ac2097cf7e5/vllm/v1/executor/multiproc_executor.py#L103) which in turn begins to [initialise workers](https://github.com/vllm-project/vllm/blob/9e86352c606c61095029f156ae3e4ac2097cf7e5/vllm/v1/executor/multiproc_executor.py#L807) across all of the ranks. Then, the [worker](https://github.com/vllm-project/vllm/blob/c6741b2ad48a46e87d2cce35d113c4ae0950af91/vllm/v1/worker/gpu_worker.py#L124) [constructs](https://github.com/vllm-project/vllm/blob/0e207dac784e6b217b8dc1f44ae3985b1f216b50/vllm/v1/worker/gpu_worker.py#L257) the [model runner](https://github.com/vllm-project/vllm/blob/c6741b2ad48a46e87d2cce35d113c4ae0950af91/vllm/v1/worker/gpu_model_runner.py#L421).
 
-The `GPUModelRunner` uses a loader to [build the model architecture](https://github.com/vllm-project/vllm/blob/c6741b2ad48a46e87d2cce35d113c4ae0950af91/vllm/v1/worker/gpu_model_runner.py#L5163) from config directly on-device, and has tensors allocated in GPU memory ready to receive parameters. The loader then populates these addresses by passing a [weight iterator](https://github.com/vllm-project/vllm/blob/c6741b2ad48a46e87d2cce35d113c4ae0950af91/vllm/model_executor/model_loader/default_loader.py#L321), which wraps the safetensors pre-downloaded from Huggingface, to the loaded model's weight loader. The loader [iterates over each tuple](https://github.com/vllm-project/vllm/blob/c6741b2ad48a46e87d2cce35d113c4ae0950af91/vllm/model_executor/models/llama.py#L456) `(name, loaded_weight)` in the iterator, copying each parameter into its destination address. Ultimately, in the simplest case (ignoring book-keeping), [weight loading](https://github.com/vllm-project/vllm/blob/c6741b2ad48a46e87d2cce35d113c4ae0950af91/vllm/model_executor/model_loader/weight_utils.py#L1198) amounts to:
+The model runner uses a loader to [build the model architecture](https://github.com/vllm-project/vllm/blob/c6741b2ad48a46e87d2cce35d113c4ae0950af91/vllm/v1/worker/gpu_model_runner.py#L5163) from config directly on-device, and has tensors allocated in GPU memory ready to receive parameters. The loader then populates these addresses by passing a [weight iterator](https://github.com/vllm-project/vllm/blob/c6741b2ad48a46e87d2cce35d113c4ae0950af91/vllm/model_executor/model_loader/default_loader.py#L321), which wraps the safetensors pre-downloaded from Huggingface, to the loaded model's weight loader. The loader [iterates over each tuple](https://github.com/vllm-project/vllm/blob/c6741b2ad48a46e87d2cce35d113c4ae0950af91/vllm/model_executor/models/llama.py#L456) `(name, loaded_weight)` in the iterator, copying each parameter into its destination address. Ultimately, in the simplest case (ignoring book-keeping), [weight loading](https://github.com/vllm-project/vllm/blob/c6741b2ad48a46e87d2cce35d113c4ae0950af91/vllm/model_executor/model_loader/weight_utils.py#L1198) amounts to:
 
 ```python
 for name, loaded_weight in weight_iterator:
@@ -109,7 +111,7 @@ By now, we have complete (and compiled) sequences of kernels that are executed i
 #### CUDA Graphs
 While torch.compile largely tackled launch overhead by reducing the *number* of kernels, CUDA graphs tackle what remains: the cost of issuing each surviving launch. Instead of the CPU walking the sequence and firing kernels one at a time -- each requiring a separate trip across the CUDA API -- the entire sequence is captured once and replayed as a single operation.
 
-If you're questioning 'what if the GPU takes longer to complete than the CPU does to queue the next kernel?', then you have touched on exactly why CUDA graphs are only captured for smaller sequences. Kernel launches are asynchronous: normally the CPU runs ahead of the GPU, keeping the stream's buffer full, but at smaller sequence sizes (e.g., `seq_len < 512 tokens`), each kernel runs for so little time that the GPU drains the queue faster than the CPU is able to refill it: the per-launch overhead is large relative to the compute time (launch-bound). If you were to visualise a trace of this execution, you might see something like the left-hand side of the image below: bubbles of idle time (bad) on the GPU between each kernel launch. For larger sequences, arithmetic intensity rises and per-kernel duration grows, so the fixed cost is amortised.
+If you're questioning 'what if the GPU takes longer to complete than the CPU does to queue the next kernel?', then you have touched on exactly why CUDA graphs are only captured for smaller sequences. Kernel launches are asynchronous: normally the CPU runs ahead of the GPU, keeping the stream's pushbuffer full, but at smaller sequence sizes (e.g., `seq_len < 512 tokens`), each kernel runs for so little time that the GPU drains the queue faster than the CPU is able to refill it: the per-launch overhead is large relative to the compute time (launch-bound). If you were to visualise a trace of this execution, you might see something like the left-hand side of the image below: bubbles of idle time (bad) on the GPU between each kernel launch. For larger sequences, arithmetic intensity rises and per-kernel duration grows, so the fixed cost is amortised.
 
 For smaller tensors, [the forward pass is recorded](https://github.com/vllm-project/vllm/blob/main/vllm/v1/worker/gpu/cudagraph_utils.py#L261) at each capture size (e.g., `seq_len=[32, 64, 128, 256, 512]`). It is important to note that these shapes do not overlap with those encountered during the earlier profiling runs -- as such, kernel compilation will occur for these smaller shapes. Each pass produces a static sequence (specifically a directed acyclic graph) of CUDA operations that can be replayed directly *without* the per-operation kernel dispatch overhead.  At inference, incoming batches are padded and the corresponding graph replayed, almost entirely eliminating the CPU-side dispatch cost. The right-hand side of the below image illustrates this point.
 
@@ -175,7 +177,7 @@ Firstly, we'll consider how a Python process is actually loaded. Once the Python
 4. The interpreter runs the top-level functions of the imported module; most contain more imports, and this process cascades again. Compiled extensions (`.so`/`.dll` libraries) are attached to the live process via `dlopen` (this is contrasted against the dynamic linker which performs a similar function at startup); `dlopen` finds the library, then `mmap`s the segments into the process's address space and initialises them. For `torch`, this eventually pulls in the C++ core, and GPU libraries like cuBLAS or cuDNN.
 5. As each submodule is scanned by the interpreter, the module object is completed in `sys.modules`; the `torch` module is fully built, and bound in `main.py`'s namespace.
 
-vLLM will pay the import cost once, at startup, and then forks the worker processes which inherited the imported state.
+vLLM will [pay the import cost once](https://github.com/vllm-project/vllm/blob/db28ae2d078da82d01f8e7fad05fb27a52ce37ef/vllm/entrypoints/openai/api_server.py#L87), at startup, and then forks the worker processes which inherited the imported state.
 
 We can see where the time is spent performing `import torch` via a simple bash experiment using `strace` (Linux syscall tracer):
 ```bash
@@ -205,7 +207,7 @@ cat strace_summary.txt
 100.00    1.096550          37     29079      2716 total
 ```
 
-Just importing `torch` takes one second -- doesn't sound like much, but have you seen how many imports vLLM has? Ignoring the `futex` (mostly threads waiting on each other), we can see where the time goes:
+Just importing `torch` takes one second -- doesn't sound like much, but consider how many imports vLLM has. Ignoring the `futex` (mostly threads waiting on each other), we can see where the time goes:
 1. A lot of searching the disk:
     - `newfstatat` -- fetch a file's metadata by path (does it exist, if so what is it).
     - `openat` -- opening files. Note that when it tries to open a file that doesn't exist it errors (time wasted! 924 times)
@@ -225,7 +227,7 @@ CUDA context is essentially the GPU-side equivalent of a process's address space
 Every process that uses the GPU gets its own context per device -- a live connection split across the process, the kernel driver, and the GPU, all keyed to the process. Therefore, it is ephemeral -- and recreated at each startup.
 
 #### Weights & KV Cache
-The full cost of initialisation is paid every startup. Weights and KV cache are present in device memory.
+The full cost of initialisation is paid every startup. Weights are loaded and KV cache is allocated into device memory.
 
 #### Cache Reuse
 We've just seen how we can re-use caches to eliminated the costs associated with compilation. However, not one of them eliminates the cost of having to load the result into a live process:
@@ -312,7 +314,7 @@ That was the easy part. Now for the hard part. Remember we said that CRIU has to
 2. **Switch off the old stack**: it stops using its original stack, moving the stack point to the blob's own stack, and then unmaps the original.
 3. **Demolish**: the code walks the address space and unmaps everything that isn't itself or its data. The original CRIU restore code, the old stack, heap, libc, etc, all are unmapped. Only the blob remains in the address space.
 4. **Rebuild at the original addresses**: for each of the target virtual memory addresses, the code performs an `mmap` with `MAP_FIXED` (forces each region to the address it lived at previously) at the exact original virtual address, with the original permissions and backing (anonymous/file backed). This means that every pointer survives restore -- heap pointers, function pointers, device pointers, CUDA graphs, etc. -- all valid because the memory was laid back down at the exact same place.
-5. **Fill**: anonymous pages have their saved bytes copied in from the image (clean file-backed pages are already correct, so they're skipped). [This is done via `preadv`](https://github.com/checkpoint-restore/criu/blob/3dd2420c16e54fb7cd08b3e511d3a8bfb03cd001/criu/pie/restorer.c#L1805) -- a vectored positional read (`pread`) that pulls saved bytes from the image file's descriptor into the freshly mapped pages. The cost of this is a mandatory double copy: by the time `preadv` runs, the image data exists in the kernel's page cache from when CRIU read the image file off disk; `preadv` must then pull the relevant bytes from the page cache and copy them into the anonymous page, before punching a hole in the image file after each read to release the page cache copy. We'll re-visit this, because it's slower than we can do for our use-case: every page is copied up-front at restore time, whether or not the process ever touches it. Since we're optimising for start-up latency, that's sub-optimal -- a copy-on-write (only copy the page if it's dirtied/its state is modified) backed mapping would defer the copy to runtime and pay it only on the pages that are actually written, leaving immutable code and other untouched pages at zero cost. Anyway -- after restoring the address space, the restorer tears itself down, unmapping its working memory, leaving only one small blob. 
+5. **Fill**: anonymous pages have their saved bytes copied in from the image (clean file-backed pages are already correct, so they're skipped). [This is done sequentially via `preadv`](https://github.com/checkpoint-restore/criu/blob/3dd2420c16e54fb7cd08b3e511d3a8bfb03cd001/criu/pie/restorer.c#L1805) -- a vectored positional read (`pread`) that pulls saved bytes from the image file's descriptor into the freshly mapped pages. The cost of this is a mandatory double copy: by the time `preadv` runs, the image data exists in the kernel's page cache from when CRIU read the image file off disk; `preadv` must then pull the relevant bytes from the page cache and copy them into the anonymous page, before punching a hole in the image file after each read to release the page cache copy. We'll re-visit this, because it's slower than we can do for our use-case: every page is copied up-front at restore time, whether or not the process ever touches it. Since we're optimising for start-up latency, that's sub-optimal -- a copy-on-write (only copy the page if it's dirtied/its state is modified) backed mapping would defer the copy to runtime and pay it only on the pages that are actually written, leaving immutable code and other untouched pages at zero cost. Anyway -- after restoring the address space, the restorer tears itself down, unmapping its working memory, leaving only one small blob. 
 6. **Restore CPU state**: at this point, we need to restore the CPU state. A bit of a sticky one, since we'd like to use the CPU to restore it. To restore state, we'd need to overwrite the registers with the saved values, and then jump to the saved instruction pointer. But we have a quandary:
      - The moment we load the stack pointer with the target's value, our own stack is gone -- this is where the restore code keeps local variables.
      - The moment we load the instruction pointer, execution leaves our restore code, so we cannot make any further moves.
@@ -321,12 +323,15 @@ That was the easy part. Now for the hard part. Remember we said that CRIU has to
 
 Et voilà -- process restored. 
 
-## Experiments
-Each experiment, we'll time how long it takes for the vLLM process to be restored, and the time for the first token (TTFT).
+## Restoring vLLM
+Each experiment, we'll time how long it takes for the vLLM process to be restored, how long it takes to reload the weights (where appropriate), and the time for the first token (TTFT).
 
-CRIU is remarkably fiddly and tempermental. To keep it happy, we must first set a number of container and CRIU flags.
+CRIU is remarkably fiddly and tempermental. To keep it happy, we must first set a number of container and CRIU flags. To see these, expand the section below.
 
-Necessary container flags:
+<details>
+<summary><strong>Flags and vars</strong></summary>
+
+Container flags:
 ```bash
 --cap-add=SYS_ADMIN \
 --cap-add=SYS_PTRACE \
@@ -378,56 +383,85 @@ Necessary also to stop the charming `Unknown shit 600: (IO_URING)` CRIU error:
 ```bash
 sudo sysctl kernel.io_uring_disabled=2
 ```
+</details>
 
 ### Checkpoint-restore of the vLLM Process
 Firstly, we'll capture and restore the live vLLM process when it has finished initialisation and is ready to start generating tokens. `cuda-checkpoint` moves the GPU state to memory, and the full process is dumped; weights are baked into the model checkpoint.
 
-Checkpoint size: ~15GB  
-Server healthy: 29.3s  
-TTFT: 31.1s
+<div style="display: flex; justify-content: center;">
+  <div style="width: 100%; max-width: 560px;">
+    {{< result checkpoint="15GB" ttft="31.1s" restore="29.3" reload="0" ckptdelta="" ttftdelta="" color="green" >}}
+  </div>
+</div>  
 
 Surprisingly, this process was actually *slower* than simply relaunching the process with warm caches. I'd hypothesise that this is due to `cuda-checkpoint` having to recreate GPU state (~12GB) through a sub-optimal path. Maybe we should see what happens if we handle restoring GPU state ourselves?
 
 ### Checkpoint-restore at Sleep Level 1
-vLLM has a [sleep mode](https://docs.vllm.ai/en/latest/features/sleep_mode/) feature that allows us to offload the GPU state, discarding KV cache and storing the model weights in host memory.
-
-Checkpoint size: 11.4GB    
-Server healthy: 13.9s  
-Weight reload: ~2.3s  
-TTFT: 16.2s  
-
-Remember how we discussed earlier how `preadv` was sub-optimal for our CRIU use-case (all pages copied up front), and how we'd benefit from instead using a copy-on-write backed mapping (only copy pages if they're dirtied)? Thankfully, [doubleword's](https://doubleword.ai/) [criu fork](https://github.com/doublewordai/criu/tree/warmstart/zero-copy-restore) does just that: it replaces the [native `preadv` path ](https://github.com/checkpoint-restore/criu/blob/3dd2420c16e54fb7cd08b3e511d3a8bfb03cd001/criu/pie/restorer.c#L2263) with a [zero-copy `mmap` path](https://github.com/doublewordai/criu/blob/c7f747939c3ab0ad688069be250cac34afbabe0d/criu/pie/restorer.c#L1901); perfect, given the [vLLM state is largely stable](https://github.com/vllm-project/vllm/blob/09841ae705ce73967b3303cdda5c7046d7710f5f/vllm/v1/engine/core.py#L232) (requiring fewer page writes) after initialisation. Re-running our sleep level 1 experiment using this fork reduced time to server healthy (restore time) by **~2s**. 
-
-Server healthy: 11.6s  
-TTFT: 13.9s  
-
-
-### Checkpoint-restore at Sleep Level 2
-Checkpoint size: 3.4GB   
-Server healthy: 2.5s  
-Weight reload: 8s  
-TTFT: 10.5s  
+vLLM has a [sleep mode](https://docs.vllm.ai/en/latest/features/sleep_mode/) feature that allows us to offload the GPU state, discarding KV cache and storing the model weights in host memory. This is perfect, as it means that `cuda-checkpoint` will only have to restore the CUDA context on-device.
 
 ```bash
-curl -s -X POST http://localhost:8000/wake_up?tags=weights >/dev/null
+curl -s -X POST 'http://localhost:8000/sleep?level=1
 ```
 
+When we hit the sleep endpoint, a remote procedure call (RPC) is dispatched to all of the workers, and their [sleep function](https://github.com/vllm-project/vllm/blob/db28ae2d078da82d01f8e7fad05fb27a52ce37ef/vllm/v1/worker/gpu_worker.py#L172) is called. vLLM uses a [CUDA memory allocator](https://github.com/vllm-project/vllm/blob/db28ae2d078da82d01f8e7fad05fb27a52ce37ef/vllm/device_allocator/cumem.py#L82) to manage memory allocations (parameters, KV cache, etc.). When we put vLLM to sleep, the allocator [iterates over all of the allocations](https://github.com/vllm-project/vllm/blob/db28ae2d078da82d01f8e7fad05fb27a52ce37ef/vllm/device_allocator/cumem.py#L251) it has made on the GPU, making a **pinned copy** in host memory for those we wish to later restore, and then unmaps and releases the allocations on-device. However, it will maintain a record of what these allocations were and where they were made (by address). At sleep level 1, only the weights are backed up to CPU; the KV cache is discarded entirely. We checkpoint at this stage, when vLLM is asleep. This reduces our checkpoint size to 11.4GB, and, importantly, `cuda-checkpoint` does not have a bulky GPU state to restore. CRIU will restore the state exactly as we captured it, with weights in host memory. 
+
+Thankfully, when we [wake vLLM back up](https://github.com/vllm-project/vllm/blob/db28ae2d078da82d01f8e7fad05fb27a52ce37ef/vllm/v1/worker/gpu_worker.py#L194), the [allocator](https://github.com/vllm-project/vllm/blob/db28ae2d078da82d01f8e7fad05fb27a52ce37ef/vllm/device_allocator/cumem.py#L283) automatically creates new physical allocations and maps them back to original virtual address. The backed-up CPU tensors (weights) are then restored to device via `cudaMemcpy` -- although a serialised operation, this weight reload takes just ~2.3s because the tensors are resident in pinned host memory and so are able to take full advantage of the DMA to device.
+
+<div style="display: flex; justify-content: center;">
+  <div style="width: 100%; max-width: 560px;">
+    {{< result checkpoint="11.4GB" ttft="16.2s" restore="13.9" reload="2.3" ckptdelta="3.6" ttftdelta="13.9" color="green" >}}
+  </div>
+</div>  
+
+We can also whittle down the time it takes to restore the vLLM process to a live state. Remember how we discussed earlier how `preadv` was sub-optimal for our CRIU use-case (all pages copied up front), and how we'd benefit from instead using a copy-on-write backed mapping (only copy pages if they're dirtied)? Thankfully, Doubleword's [CRIU fork](https://github.com/doublewordai/criu/tree/warmstart/zero-copy-restore) does just that: it replaces the [native `preadv` path ](https://github.com/checkpoint-restore/criu/blob/3dd2420c16e54fb7cd08b3e511d3a8bfb03cd001/criu/pie/restorer.c#L2263) with a [zero-copy `mmap` path](https://github.com/doublewordai/criu/blob/c7f747939c3ab0ad688069be250cac34afbabe0d/criu/pie/restorer.c#L1902); perfect, given the [vLLM state is largely stable](https://github.com/vllm-project/vllm/blob/09841ae705ce73967b3303cdda5c7046d7710f5f/vllm/v1/engine/core.py#L232) (requiring fewer page writes) after initialisation. Re-running our sleep level 1 experiment using this fork reduced restore time by **~2s**. 
+
+<div style="display: flex; justify-content: center;">
+  <div style="width: 100%; max-width: 560px;">
+    {{< result checkpoint="11.4GB" ttft="13.9s" restore="11.6" reload="2.3" ckptdelta="" ttftdelta="2.3" color="green" >}}
+  </div>
+</div>  
+
+Not bad -- but not great. In similar spirit as the leap from the last section -- alleviating the burden on slower, more generic restore paths (last time it was `cuda-checkpoint`; we gave its work to vLLM) -- we can go one step further and reduce the amount of work CRIU restore has to do.
+
+### Checkpoint-restore at Sleep Level 2
+vLLM also has a second sleep level. At this level, vLLM's GPU allocations, including weights and KV cache, are discarded *entirely* (though the allocator still maintains its pointers and named buffers, such as RoPE scaling tensors, are [maintained and saved to host](https://github.com/vllm-project/vllm/blob/db28ae2d078da82d01f8e7fad05fb27a52ce37ef/vllm/v1/worker/gpu_worker.py#L175)). This means that when we checkpoint the sleeping process, the weights are not baked into the checkpoint. In so doing, we manage to reduce our checkpoint size to just **3.4GB** -- this restores in a blazingly fast **2.5s**.
+
+On wake-up, the allocator again re-creates the virtual addresses with physical memory backing -- but we don't have any backup CPU tensors. Instead, we have to hit vLLM's `collective_rpc` endpoint to issue a [`reload_weights`](https://github.com/vllm-project/vllm/blob/db28ae2d078da82d01f8e7fad05fb27a52ce37ef/vllm/v1/worker/gpu_model_runner.py#L5405) call to the workers: 
 ```bash
 curl -s -X POST 'http://localhost:8000/collective_rpc' -H 'Content-Type: application/json' -d '{"method":"reload_weights"}'
 ```
+This weight reload functions in much the same way to the initial weight load -- amounting to an [iterator calling `copy_`](https://github.com/vllm-project/vllm/blob/09841ae705ce73967b3303cdda5c7046d7710f5f/vllm/v1/worker/gpu_model_runner.py#L5457). Weight reload completes in **~8s**, giving us a TTFT of **10.5s**.
 
-`reload_weights` amounts to an [iterator calling `copy_`](https://github.com/vllm-project/vllm/blob/09841ae705ce73967b3303cdda5c7046d7710f5f/vllm/v1/worker/gpu_model_runner.py#L5396)
+<div style="display: flex; justify-content: center;">
+  <div style="width: 100%; max-width: 560px;">
+    {{< result checkpoint="3.4GB" ttft="10.5s" restore="2.5" reload="8" ckptdelta="8" ttftdelta="3.4" color="green" >}}
+  </div>
+</div>  
 
-First, we [serialise the weights to a flat file](https://github.com/j9smith/vllm/blob/8de87520d4a7399c67f8779a8f3b156a58299b0f/vllm/v1/worker/gpu_worker.py#L196) by walking `model.named_parameters()`, appending raw bytes to a `.bin` file and building an index of `(offset, length, shape, dtype)` as we go. The resulting file is essentially a single contiguous blob of every parameter back to back, together with an index file that says "tensor `name` lives at byte `offset`, runs for `length` bytes, and should be interpreted as `shape/dtype`" -- very instructive for restore.
+We can do much better than vLLM's native reload path -- to do so, we'll have to implement our own weight-loading logic on a fork of vLLM.
+
+The safetensors file we loaded our weights from initially acts as a source file; during startup, vLLM transforms these weights, with each layer and quantisation method performing their own manipulations, [for example](https://github.com/vllm-project/vllm/blob/3483240b7ea3d4372b6c79369ea36617f8b1fbb2/vllm/model_executor/kernels/linear/base.py#L249) to reorder them for better memory access, quantise them, fuse them into buffers (`q/k/v -> qkv`), etc. By the time startup finishes, the tensors sitting on the GPU have different names, shapes, and layouts from anything on disk. We want to capture this state, rather than pay the cost of processing them again.
+
+First, we [serialise the weights to a flat file](https://github.com/j9smith/vllm/blob/8de87520d4a7399c67f8779a8f3b156a58299b0f/vllm/v1/worker/gpu_worker.py#L196) before sleeping by walking `model.named_parameters()`, appending raw bytes to a `.bin` file and building an index of `(offset, length, shape, dtype)` as we go. The resulting file is essentially a single contiguous blob of every parameter back to back, together with an index file that says "tensor `name` lives at byte `offset`, runs for `length` bytes, and should be interpreted as `shape/dtype`" -- just what we need to restore them. Now, our goal is to get these parameters on-device and at their address as fast as possible.
+
+Let's run through some options:
+
+1. **Baseline per-tensor `copy_`**: we iterate over each tensor (using the index file), and `copy_` each parameter individually into its destination -- same effect as vLLM's default weight loader; serialised per tensor, fixed overhead per transfer. Bad.
+2. **Coalesce the transfer**:  read the whole weights file into memory, then copy the whole weights file to a staging buffer on device (host-to-device; H2D) -- in one transfer. Once the weights are resident in buffer, we can perform a device→device `copy_` to move the tensors to the correct device address -- fast. Requires us to pin a very large allocation in memory. PCIe (memory → device) sits idle while the weights file reads into memory, NVMe (disk → memory) sits idle while it's copied to device. Bad.
+3. **Chunk the transfer**: split the weights file into chunks. Maintain two separate buffers, and read chunk $N+1$ into one while copying chunk $N$ from another, using two separate threads and switching the role of each buffer after each transfer. H2D/D→D overlaps with memory read, and we need only need to pin enough memory for the two buffers. Good. However, we only have one `preadv` in flight at once, yielding a queue depth of 1 on NVMe, failing to saturate bandwidth (I measured ~700mb/s at QD1, versus measured 3764mb/s theoretical max). Bad.
+4. **Saturate the disk**: split the chunks into $N$ slices, and have a separate thread move each slice from disk to memory. This yields multiple `preadv` in flight at once, building queue depth and saturating the disk's channels. Good (empirically, $N=8$ offered me the best results). 
 
 ![alt text](resources/double-buffer.png)
 
-By issuing a collective RPC call to the workers:
-```bash
-curl -s -X POST 'http://localhost:8000/collective_rpc' \
- -H 'Content-Type: application/json' \
- -d "{\"method\": \"reload_weights_fast\", \"kwargs\": {\"flat_file_path\": \"/weights/weights\"}}"
-```
+Thus, we arrive at [`reload_weights_fast`](https://github.com/j9smith/vllm/blob/8de87520d4a7399c67f8779a8f3b156a58299b0f/vllm/v1/worker/gpu_worker.py#L402): we group the parameters into chunks, create two pinned buffers in CPU memory, spin up $N$ threads to each grab a slice of the chunk then start loading the slices into one buffer. Once the chunk is in memory, it is DMA'd onto device, where it is reinterpreted into distinct tensors and `copy_`'d into its destination; meanwhile, the other buffer is being filled from disk. Rinse and repeat until all weights have been restored. Using $N=8$ and a chunk size of 512mb, this process reduced weight reloading to a blistering **3.3s** (versus a theoretical minimum of ~2s).
 
-Weight reload: 3.3s  
-TTFT: 5.8s  
+<div style="display: flex; justify-content: center;">
+  <div style="width: 100%; max-width: 560px;">
+    {{< result checkpoint="3.4GB" ttft="5.8s" restore="2.5" reload="3.3" ckptdelta="" ttftdelta="4.7" color="green" >}}
+  </div>
+</div>
+
+And so, we arrive at the end (for now). We have reduced the time it takes to cold-start a vLLM container by a factor of **20**, from **117 seconds** to just **5.8 seconds**.
+
+![alt text](resources/vllm-final-breakdown.png)
+

@@ -1,0 +1,131 @@
+{{- /*
+  result.html — vLLM benchmark result card shortcode.
+
+  Place this file at:  layouts/shortcodes/result.html
+
+  Usage:
+    {{< result checkpoint="3.4 GB" ttft="10.5s" restore="2.5" reload="8" ckptdelta="11.4" ttftdelta="13.9" color="green" >}}
+
+  Params:
+    checkpoint  display string, e.g. "3.4 GB"           (optional)
+    ttft        display string, e.g. "10.5s"            (optional)
+    restore     seconds, e.g. "2.5"                     (optional) — server-healthy time
+    reload      seconds, e.g. "8"                       (optional) — weight reload time
+    ckptdelta   previous checkpoint value, e.g. "11.4"  (optional)
+    ttftdelta   previous TTFT value, e.g. "13.9"        (optional)
+    color       "green" (improvement) or "red" (regression) (optional)
+*/ -}}
+
+{{- if not (.Page.Scratch.Get "rc-css-loaded") -}}
+{{- .Page.Scratch.Set "rc-css-loaded" true -}}
+<style>
+.rc-card {
+  --rc-card-bg:    #f6f5f1;
+  --rc-text:       #1c1c1a;
+  --rc-muted:      #6b6b64;
+  --rc-good:       #3b6d11;
+  --rc-bad:        #a32d2d;
+  --rc-restore-bg: #e6f1fb; --rc-restore-fg: #185fa5;
+  --rc-reload-bg:  #faeeda; --rc-reload-fg:  #854f0b;
+  background: var(--rc-card-bg); color: var(--rc-text);
+  border-radius: 12px; padding: 1rem 1.25rem; margin: 1.5rem 0;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+.rc-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 14px; flex-wrap: wrap; }
+.rc-stats { display: flex; gap: 28px; }
+.rc-stat-label { font-size: 13px; color: var(--rc-muted); margin-bottom: 2px; }
+.rc-stat-value { font-size: 20px; font-weight: 500; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.rc-delta { font-size: 12px; font-family: inherit; }
+.rc-delta-good { color: var(--rc-good); }
+.rc-delta-bad  { color: var(--rc-bad); }
+.rc-eq { font-size: 12px; color: var(--rc-muted); }
+.rc-bar { display: flex; height: 38px; border-radius: 8px; overflow: hidden; gap: 2px; }
+.rc-seg { display: flex; flex-direction: column; justify-content: center; padding-left: 10px; overflow: hidden; white-space: nowrap; min-width: 0; box-sizing: border-box; }
+.rc-seg-label { font-size: 11px; }
+.rc-seg-value { font-size: 14px; font-weight: 500; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.rc-restore { background: var(--rc-restore-bg); color: var(--rc-restore-fg); }
+.rc-reload  { background: var(--rc-reload-bg);  color: var(--rc-reload-fg);  }
+@media (prefers-color-scheme: dark) {
+  .rc-card {
+    --rc-card-bg:    #262624;
+    --rc-text:       #ededeb;
+    --rc-muted:      #a2a29a;
+    --rc-good:       #97c459;
+    --rc-bad:        #f09595;
+    --rc-restore-bg: #0c447c; --rc-restore-fg: #b5d4f4;
+    --rc-reload-bg:  #633806; --rc-reload-fg:  #fac775;
+  }
+}
+</style>
+{{- end -}}
+
+{{- $checkpoint := .Get "checkpoint" | default "" -}}
+{{- $ttft       := .Get "ttft"       | default "" -}}
+{{- $restore    := .Get "restore"    | default "" -}}
+{{- $reload     := .Get "reload"     | default "" -}}
+{{- $ckptdelta  := .Get "ckptdelta"  | default "" -}}
+{{- $ttftdelta  := .Get "ttftdelta"  | default "" -}}
+{{- $color      := .Get "color"      | default "" -}}
+
+{{- $rNum := 0.0 -}}{{- if ne $restore "" }}{{ $rNum = float $restore }}{{ end -}}
+{{- $wNum := 0.0 -}}{{- if ne $reload  "" }}{{ $wNum = float $reload  }}{{ end -}}
+{{- $showRestore := gt $rNum 0.0 -}}
+{{- $showReload  := gt $wNum 0.0 -}}
+{{- $hasbar  := or $showRestore $showReload -}}
+{{- $bothbar := and $showRestore $showReload -}}
+
+{{- $deltaClass := "" -}}
+{{- $deltaArrow := "" -}}
+{{- if eq $color "green" -}}
+  {{- $deltaClass = "rc-delta-good" -}}
+  {{- $deltaArrow = "↓" -}}
+{{- else if eq $color "red" -}}
+  {{- $deltaClass = "rc-delta-bad" -}}
+  {{- $deltaArrow = "↑" -}}
+{{- end -}}
+
+<div class="rc-card">
+  <div class="rc-head">
+    <div class="rc-stats">
+      {{- with $checkpoint }}
+      <div>
+        <div class="rc-stat-label">Checkpoint</div>
+        <div class="rc-stat-value">{{ . }}
+          {{- if and $ckptdelta $deltaClass }}
+            <span class="rc-delta {{ $deltaClass }}">{{ $deltaArrow }} {{ $ckptdelta }}</span>
+          {{- end -}}
+        </div>
+      </div>
+      {{- end }}
+      {{- with $ttft }}
+      <div>
+        <div class="rc-stat-label">TTFT</div>
+        <div class="rc-stat-value">{{ . }}
+          {{- if and $ttftdelta $deltaClass }}
+            <span class="rc-delta {{ $deltaClass }}">{{ $deltaArrow }} {{ $ttftdelta }}</span>
+          {{- end -}}
+        </div>
+      </div>
+      {{- end }}
+    </div>
+    {{- if $bothbar }}
+    <div class="rc-eq"></div>
+    {{- end }}
+  </div>
+  {{- if $hasbar }}
+  <div class="rc-bar">
+    {{- if $showRestore }}
+    <div class="rc-seg rc-restore" style="flex: {{ $rNum }} 1 0">
+      <span class="rc-seg-label">restore</span>
+      <span class="rc-seg-value">{{ $restore }}s</span>
+    </div>
+    {{- end }}
+    {{- if $showReload }}
+    <div class="rc-seg rc-reload" style="flex: {{ $wNum }} 1 0">
+      <span class="rc-seg-label">weight reload</span>
+      <span class="rc-seg-value">{{ $reload }}s</span>
+    </div>
+    {{- end }}
+  </div>
+  {{- end }}
+</div>
