@@ -47,9 +47,7 @@ homeIntroContent = """
   </div>
 
   <div class="home-hero__text">
-    <p>Hi, I'm Joel 👋 I'm a machine learning engineer taking a hands-on approach to learning. I enjoy turning ideas into working ML systems and sharing what I learn along the way (see below for some of my posts).</p>
-    <p>I'm particularly interested in generative modelling and the engineering required to run it efficiently at scale.</p>
-    <p>Feel free to reach out to chat about anything ML (particularly if you're interested in systems work!).</p>
+    <p>Hi, I'm Joel 👋 I'm a machine learning engineer with a particular interest in the systems and engineering required to run models efficiently at scale -- feel free to reach out to chat about anything ML!</p>
   </div>
 </div>
 """
