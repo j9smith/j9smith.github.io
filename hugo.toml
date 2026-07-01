@@ -88,10 +88,6 @@ name = "posts"
 url = "/posts/"
 
 [[params.menu]]
-name = "projects"
-url = "/projects/"
-
-[[params.menu]]
 name = "cv"
 url = "/cv.pdf"
 
