@@ -30,7 +30,7 @@ An agent is simply a model wrapped in a harness. The model is prompted to emit a
 
 ### **Longer context and faster growth**
 
-Firstly: agentic trajectories start with a higher token usage, caused by bulkier system prompts (including various tool definitions, etc.), and grow faster (tool outputs are dumped into context, and more reasoning occurs). By turn 10, the median agent trajectory is running close to double the context of a chat conversation. This context also grows for much longer -- in our example, we have only one agent trajectory that exceeded 20 turns. This, however, is supported by one paper which examines agent trajectories with a mean turn count of 37, and a range of 1-2,518 ([Yuan et. al](https://arxiv.org/abs/2604.16682)), while another finds 54% of chat conversations are single turn requests, with 50th and 90th percentile turn-counts of 1 and 5 ([Wang et. al](https://arxiv.org/abs/2506.02634)).
+Firstly: agentic trajectories start with a higher token usage, caused by bulkier system prompts (including various tool definitions, etc.), and grow faster (tool outputs are dumped into context, and more reasoning occurs). By turn 10, the median agent trajectory is running close to double the context of a chat conversation. This context also grows for much longer -- in our example, we have only one agent trajectory that exceeded 20 turns. This, however, is supported by one paper which examines agent trajectories with a mean turn count of 37, and a range of 1-2,518 ([Yuan et al.](https://arxiv.org/abs/2604.16682)), while another finds 54% of chat conversations are single turn requests, with 50th and 90th percentile turn-counts of 1 and 5 ([Wang et al.](https://arxiv.org/abs/2506.02634)).
 
 <img src="resources/context_growth.png" alt="alt text" width="750" style="display: block; margin: 0 auto;">
 
@@ -65,17 +65,17 @@ This GPU memory is finite -- once the request stops running, its KV cache become
 Destroying and recompute is a non-starter: we'd contend against other requests in our inference engine for compute time, slowing the queue, and, worse, recomputing is substantially slower than reloading. Pinning and offload/reload both come with cost, and to decide which is cheaper, we need to examine how much time passes between requests.
 
 ### **Gap Durations and Closed-Endedness**
-Human chat requests' gap duration skew substantially longer than agentic requests: once you've read a response, you need time to digest, formulate a response, then send. A harness simply executes assigned tool calls then returns their output, clustering gaps substantially shorter with a median return time of 0.18s versus chat requests' 96.24s. 
+Human chat requests' gap durations skew substantially longer than agentic requests: once you've read a response, you need time to digest, formulate a response, then send. A harness simply executes assigned tool calls then returns their output, clustering gaps substantially shorter with a median return time of 0.18s versus chat requests' 96.24s. 
 
 <img src="resources/gap_distribution.png" alt="alt text" width="750" style="display: block; margin: 0 auto;">
 
-Broadly, it almost always makes sense to allow a chat request's KV cache to be evicted from VRAM (ideally we do not hold a KV cache resident for 19 million seconds -- that would probably be a bad idea): it is almost always cheaper to evicted and reload at resumption. For agentic loads, which send follow-up requests substantially faster, that decision is more nuanced.
+Broadly, it almost always makes sense to allow a chat request's KV cache to be evicted from VRAM (ideally we do not hold a KV cache resident for 19 million seconds -- that would probably be a bad idea): it is almost always cheaper to evict and reload at resumption. For agentic loads, which send follow-up requests substantially faster, that decision is more nuanced.
 
 Computed KV blocks are [backed up to CPU RAM (offloaded) as they're computed](https://docs.vllm.ai/en/latest/features/kv_offloading_usage/#:~:text=offloading%20completed,as%20they%20are%20produced), and so we need only pay the reload cost (the offload cost is paid by default). The reload (and offload) occurs on a dedicated copy engine, [asynchronously with compute](https://docs.vllm.ai/en/latest/features/kv_offloading_usage/#:~:text=transfers%20between,overhead); thus, we do not delay compute. However, destination slots have to be [allocated *before* the load](https://github.com/vllm-project/vllm/blob/ca9c8cbd1bfb6a3fdcd3abf64b7204d967f539f0/vllm/distributed/kv_transfer/kv_connector/v1/base.py#L510) -- meaning fewer free memory slots (and so fewer resident requests) while the load completes. So we consider two costs: we either pin the KV cache in memory, in which case memory is occupied for the *entire gap* (up to 1,185s in the worst case we observed); or, we can offload from VRAM and reload on demand, in which case we sacrifice memory capacity only for the duration of the load, and accept some wasteful offloads. The better decision is the one which pre-occupies the least memory time.
 
 Assuming our single agent request has full reign of the PCIe channel (PCIe 5.0 x16 is ~64GB/s uni-directionally), reloading takes around 4.16μs per token at BF16. At the median gap duration (0.18s), a context length of around 43,270 tokens marks the threshold: below this threshold, the median gap takes longer than a reload, and so reloading is the cheaper option (costing less reserved memory time); above it, reloading would take longer than the request did to return (costing more reserved memory time). The threshold moves with the expected gap duration, the context length, and the achievable transfer speed. This, of course, is confounded by the time a returning request spends in the admission queue waiting to be scheduled by the inference engine -- but we'll ignore this for now (and it will come back to bite us later -- I found out rather too late that it adds seconds to any gap duration when under pressure).
 
-The maximum context length of Qwen3-32B is 40,960 tokens, so we never quite reach this threshold -- however [Li et. al](https://arxiv.org/abs/2511.02230) report a mean context length of 70,126 on SWE-Bench tasks while a [write-up from llm-d](https://llm-d.ai/blog/serving-glm-5-2-agentic-workloads-on-llm-d) analyses traces from Claude Code production sessions to find median main-agent context length of around 195K tokens. We can plot these points, using our measured median gap duration$^1$, against our threshold for a range of achieved bandwidths to get an idea of when pinning pays off:
+The maximum context length of Qwen3-32B is 40,960 tokens, so we never quite reach this threshold -- however [Li et al.](https://arxiv.org/abs/2511.02230) report a mean context length of 70,126 on SWE-Bench tasks while a [write-up from llm-d](https://llm-d.ai/blog/serving-glm-5-2-agentic-workloads-on-llm-d) analyses traces from Claude Code production sessions to find median main-agent context length of around 195K tokens. We can plot these points, using our measured median gap duration$^1$, against our threshold for a range of achieved bandwidths to get an idea of when pinning pays off:
 
 <img src="resources/kv_residency_threshold_bf16.png" alt="alt text" width="750" style="display: block; margin: 0 auto;">
 
@@ -169,7 +169,7 @@ Throughput is calculated according to Little's law$^4$, telling us how many traj
 
 With more blocks, a given trajectory is less likely to have its own evicted while it's in a tool call. We can increase the number of available blocks by decreasing the memory usage of each individual token -- we'll do this by quantising the KV cache (we discuss model choice as another approach later). Production systems often opt to quantise to FP8 as it results in limited response quality degradation. This is achieved by setting the vLLM flag [`--kv-cache-dtype fp8_e4m3`](https://docs.vllm.ai/en/v0.6.1/quantization/fp8_e4m3_kvcache.html), reducing the memory footprint of each token to 128KiB and doubling the number of blocks we can hold in memory.
 
-Instead of our blocks vanishing into the ether upon eviction, forcing us to recompute and stealing prefill time from other requests, we can also enable offloading via the `--kv-transfer-config` flag. Blocks can then be reloaded at request time via a prefix lookup against the connector. The experiment was ran with both 40GB and 120GB allocated to receive blocks in RAM.
+Instead of our blocks vanishing into the ether upon eviction, forcing us to recompute and stealing prefill time from other requests, we can also enable offloading via the `--kv-transfer-config` flag. Blocks can then be reloaded at request time via a prefix lookup against the connector. The experiment was run with both 40GB and 120GB allocated to receive blocks in RAM.
 
 We can see the achieved bandwidth didn't quite reach the theoretical 64GB/s -- this means that reloads take a bit longer than expected, which moves the threshold math in favour of tolerating longer tool-gaps than we earlier thought.
 
@@ -209,7 +209,7 @@ Instead of hinting the kernel about page residency, we're going to hint the vLLM
 | dontneed | pageout | default (lru) | willneed_later | willneed_soon |
 ```
 
-Our proxy keeps a record of global exponentially-weighted moving average (EWMA) gap durations by tool type$^8$, while, on a fork, we have vLLM reporting EWMA over transfer speeds. The fork also exposes an endpoint to receive hints and apply them to blocks linked to a workload via session ID, reordering the eviction queue (while protecting shared prefix blocks). Upon receiving a response, the proxy will parse it and emit a KV hint:
+Our proxy keeps a record of global exponentially-weighted moving average (EWMA) gap durations by tool type$^8$, while, [on a fork](https://github.com/j9smith/vllm/tree/feat/kv-hints), we have vLLM reporting EWMA over transfer speeds. The fork also exposes an endpoint to receive hints and apply them to blocks linked to a workload via session ID, reordering the eviction queue (while protecting shared prefix blocks). Upon receiving a response, the proxy will parse it and emit a KV hint:
 - If the trajectory is complete, the proxy emits a `dontneed` hint against the trajectory's blocks.
 - If the response contains a tool call, it will compare the relevant tool's EWMA duration against the load time EWMA:
     - If `tool_time > load time`, assign `pageout`
@@ -269,31 +269,31 @@ Hints are applied post-hoc. Because our proxy and inference server were co-locat
 </div>
 
 
-A request at the front of the admission queue could expect to wait a median of around 2.5 seconds$^{10}$, by which point the `willneed` hint had expired, demoting blocks to the back of the LRU queue. However, judging by the uplift of local (GPU) prefix hits versus the shadow run, `dontneed` and `pageout` blocks provided a buffer such that at least some `willneed` blocks were protected from eviction, meaning returning `willneed` trajectories had blocks still resident in VRAM, thereby reducing reload cost.
+Experiments were ran against a control branch, which applied hints but left the eviction mechanism untouched (i.e., LRU). A request at the front of the admission queue could expect to wait a median of around 2.5 seconds$^{10}$, by which point the `willneed` hint had expired, demoting blocks to the back of the LRU queue. However, judging by the uplift of local (GPU) prefix hits versus the control run, `dontneed` and `pageout` blocks provided a buffer such that at least some `willneed` blocks were protected from eviction, meaning returning `willneed` trajectories had blocks still resident in VRAM, thereby reducing reload cost.
 
 <div class="table-row">
 
-| Concurrency | Hinted (GPU-local) | Shadow (GPU-local) | Uplift |
+| Concurrency | Hinted (GPU-local) | Control (GPU-local) | Uplift |
 |---|---|---|---|
 | 28 | 34.51% | 23.92% | **1.44x** |
 | 36 | 32.04% | 24.59% | **1.30x** |
 | 44 | 30.34% | 28.55% | **1.06x** |
 | 52 | 35.79% | 28.80% | **1.24x** |
 
-<p class="caption"><em>Table 4 — GPU-local hit rate for hinted vs. shadow (unhinted) requests, with uplift.</em></p>
+<p class="caption"><em>Table 4 — GPU-local hit rate for hinted vs. control (unhinted) requests, with uplift.</em></p>
 </div>
 
 This appears to have translated into a modest uplift in throughput:
 
 <div class="table-row">
 
-| Concurrency | W hinted (s) | W shadow (s) | X hinted (traj/s) | X shadow (traj/s) | Uplift |
+| Concurrency | W hinted (s) | W control (s) | X hinted (traj/s) | X control (traj/s) | Uplift |
 |---|---|---|---|---|---|
 | 28 | 587.9 | 716.2 | 0.0476 | 0.0391 | **1.22x** |
 | 36 | 567.1 | 721.5 | 0.0635 | 0.0499 | **1.27x** |
 | 44 | 752.3 | 873.2 | 0.0585 | 0.0504 | **1.16x** |
 | 52 | 848.0 | 877.8 | 0.0613 | 0.0592 | **1.04x** |
-<p class="caption"><em>Table 4 — Mean trajectory length ($W$) and throughput ($X=c/W$) for hinted vs. shadow (unhinted) requests, with uplift.</em></p>
+<p class="caption"><em>Table 5 — Mean trajectory length ($W$) and throughput ($X=c/W$) for hinted vs. control (unhinted) requests, with uplift.</em></p>
 </div>
 <br>
 <img src="resources/state/image.png" alt="alt text" width="500" style="display: block; margin: 0 auto;">
