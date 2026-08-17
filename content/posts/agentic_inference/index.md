@@ -2,7 +2,7 @@
 date = '2026-08-17T10:06:32+01:00'
 draft = false
 math = true
-title = 'Improving Throughput by Optimising KV Cache Memory Usage for Agentic Workloads'
+title = 'Improving Throughput by Optimising KV Cache Efficiency for Agentic Workloads'
 summary = 'Boosting throughput by leveraging characteristics of agentic workloads to increase efficiency of the KV cache.'
 +++
 
