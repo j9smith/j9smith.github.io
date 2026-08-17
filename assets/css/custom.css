@@ -1,5 +1,33 @@
 @import "chroma.css";
 
+.table-row {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.5rem 2rem;
+}
+.table-row .table-outer {
+  flex: 0 0 auto;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0;              /* reset wrapper's own margin */
+}
+.table-row table {
+  width: auto;
+  margin: 0;               /* reset --table-margin-top/bottom */
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+.table-row .caption {
+  flex: 1 1 100%;
+  margin: 0;
+  text-align: center;
+  font-size: 0.85em;
+  font-style: italic;
+  opacity: 0.85;
+}
+
 .rc-card {
   max-width: 750px;
   margin: 1.5rem auto;
