@@ -3,7 +3,7 @@ date = '2026-08-17T10:06:32+01:00'
 draft = false
 math = true
 title = 'Improving Throughput by Optimising KV Cache Memory Usage for Agentic Workloads'
-summary = 'Boosting throughput by leveraging characteristics of agentic workloads to optimise KV cache memory usage.'
+summary = 'Boosting throughput by leveraging characteristics of agentic workloads to increase efficiency of the KV cache.'
 +++
 
 Throughput is defined by how quickly we can serve requests in aggregate. From the perspective of the inference engine, agentic and chat requests are largely indistinguishable, but have importantly different characteristics. We can leverage these characteristics to make informed decisions about how we can better manage each request's KV cache more efficiently: admitting more concurrent requests, cutting down on recompute, and scheduling them to preserve prefix reuse.
