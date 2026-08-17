@@ -6,7 +6,7 @@ title = 'Improving Throughput by Optimising KV Cache Memory Usage for Agentic Wo
 summary = 'Boosting throughput by leveraging characteristics of agentic workloads to optimise KV cache memory usage.'
 +++
 
-Throughput is defined by how quickly we can serve requests in aggregate. From the perspective of the inference engine, agentic and chat requests are largely indistinguishable, but have importantly different characteristics. We can leverage these characteristics to make informed decisions about how we can better manage each request's KV cache to alleviate memory pressure, allowing us to admit more concurrent requests.
+Throughput is defined by how quickly we can serve requests in aggregate. From the perspective of the inference engine, agentic and chat requests are largely indistinguishable, but have importantly different characteristics. We can leverage these characteristics to make informed decisions about how we can better manage each request's KV cache more efficiently: admitting more concurrent requests, cutting down on recompute, and scheduling them to preserve prefix reuse.
 
 Let's start by establishing what an agent actually is, and where their requests differ from those of a typical chat conversation.
 
